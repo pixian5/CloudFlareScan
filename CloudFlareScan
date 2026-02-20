@@ -712,17 +712,28 @@ class SpeedTestWorker(QThread):
                 filtered_results = [r for r in self.results if r.get('iata_code') and r['iata_code'].upper() == self.region_code]
                 self.status_message.emit(f"开始地区测速：{self.region_code} ({AIRPORT_CODES.get(self.region_code, '未知地区')}) (端口: {self.current_port})")
                 self.status_message.emit(f"找到 {len(filtered_results)} 个 {self.region_code} 地区的IP")
+                if not filtered_results:
+                    self.status_message.emit(f"没有找到可用的IP进行测速")
+                    self.speed_test_completed.emit([])
+                    return
+                filtered_results.sort(key=lambda x: x.get('latency', float('inf')))
+                target_ips = filtered_results[:min(self.max_count, len(filtered_results))]
             else:
-                filtered_results = self.results
                 self.status_message.emit(f"开始完全测速 (端口: {self.current_port})")
-            
-            if not filtered_results:
-                self.status_message.emit(f"没有找到可用的IP进行测速")
-                self.speed_test_completed.emit([])
-                return
-            
-            filtered_results.sort(key=lambda x: x.get('latency', float('inf')))
-            target_ips = filtered_results[:min(self.max_count, len(filtered_results))]
+                if not self.results:
+                    self.status_message.emit(f"没有找到可用的IP进行测速")
+                    self.speed_test_completed.emit([])
+                    return
+                # Group by region, take top max_count lowest-latency IPs per region
+                region_groups: Dict[str, list] = {}
+                for r in self.results:
+                    iata_key = (r.get('iata_code') or 'UNKNOWN').upper()
+                    region_groups.setdefault(iata_key, []).append(r)
+                target_ips = []
+                for region_ips in region_groups.values():
+                    region_ips.sort(key=lambda x: x.get('latency', float('inf')))
+                    target_ips.extend(region_ips[:min(self.max_count, len(region_ips))])
+                self.status_message.emit(f"共 {len(region_groups)} 个地区，每个地区最多测速 {self.max_count} 个IP")
             
             test_type = "地区测速" if self.region_code else "完全测速"
             self.status_message.emit(f"{test_type}：将对 {len(target_ips)} 个IP进行测速")
@@ -1190,9 +1201,9 @@ class CloudflareScanUI(QWidget):
         main.addWidget(speed_results_label)
 
         self.speed_table = QTableWidget()
-        self.speed_table.setColumnCount(7)
+        self.speed_table.setColumnCount(5)
 
-        self.speed_table.setHorizontalHeaderLabels(["排名", "IP地址", "地区", "延迟", "下载速度", "端口", "测速类型"])
+        self.speed_table.setHorizontalHeaderLabels(["IP地址", "地区", "延迟", "下载速度", "端口"])
         
         for i in range(self.speed_table.columnCount() - 1):
             self.speed_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeToContents)
@@ -1413,21 +1424,18 @@ class CloudflareScanUI(QWidget):
         
         try:
             with open(file_name, 'w', newline='', encoding='utf-8-sig') as csvfile:
-                fieldnames = ['排名', 'IP地址', '地区码', '地区', '延迟', '下载速度', '端口', '测速类型']
+                fieldnames = ['IP地址', '地区', '延迟', '下载速度', '端口']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 
                 writer.writeheader()
                 
                 for i, result in enumerate(self.speed_results, 1):
                     writer.writerow({
-                        '排名': i,
                         'IP地址': result['ip'],
-                        '地区码': result['iata_code'],
                         '地区': result['chinese_name'],
                         '延迟': f"{result['latency']:.2f}",
                         '下载速度': f"{result['download_speed']:.2f}",
                         '端口': result.get('port', 443),
-                        '测速类型': result.get('test_type', '未知')
                     })
             
             self.status_display.append(f"测速结果已成功导出到: {file_name}")
@@ -1589,9 +1597,6 @@ class CloudflareScanUI(QWidget):
             row = self.speed_table.rowCount()
             self.speed_table.insertRow(row)
             
-            rank_item = QTableWidgetItem(str(i))
-            rank_item.setTextAlignment(Qt.AlignCenter)
-            
             ip_item = QTableWidgetItem(result['ip'])
             ip_item.setTextAlignment(Qt.AlignCenter)
             
@@ -1627,17 +1632,11 @@ class CloudflareScanUI(QWidget):
             port_item = QTableWidgetItem(str(port))
             port_item.setTextAlignment(Qt.AlignCenter)
             
-            test_type = result.get('test_type', '未知')
-            type_item = QTableWidgetItem(test_type)
-            type_item.setTextAlignment(Qt.AlignCenter)
-            
-            self.speed_table.setItem(row, 0, rank_item)
-            self.speed_table.setItem(row, 1, ip_item)
-            self.speed_table.setItem(row, 2, iata_item)
-            self.speed_table.setItem(row, 3, latency_item)
-            self.speed_table.setItem(row, 4, speed_item)
-            self.speed_table.setItem(row, 5, port_item)
-            self.speed_table.setItem(row, 6, type_item)
+            self.speed_table.setItem(row, 0, ip_item)
+            self.speed_table.setItem(row, 1, iata_item)
+            self.speed_table.setItem(row, 2, latency_item)
+            self.speed_table.setItem(row, 3, speed_item)
+            self.speed_table.setItem(row, 4, port_item)
         
         if results:
             self.status_display.append("")

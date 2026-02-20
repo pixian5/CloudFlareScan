@@ -161,14 +161,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # The concurrency group above ensures only one run of this workflow
-          # executes at a time, so delete-then-recreate is race-free.
-          gh release delete latest --yes 2>/dev/null || true
-          git push origin :refs/tags/latest 2>/dev/null || true
+          # Compute next version (X.Y.Z, carry at 10) from the latest versioned release tag.
+          LATEST_TAG=$(gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))] | sort_by(.tagName | ltrimstr("v") | split(".") | map(tonumber)) | last | .tagName // ""')
+          if [ -z "$LATEST_TAG" ]; then
+            NEXT="v0.0.1"
+          else
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG#v}"
+            PATCH=$((PATCH + 1))
+            if [ $PATCH -ge 10 ]; then PATCH=0; MINOR=$((MINOR + 1)); fi
+            if [ $MINOR -ge 10 ]; then MINOR=0; MAJOR=$((MAJOR + 1)); fi
+            NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "Publishing version: $NEXT"
 
-          gh release create latest \
-            --title "Latest Build" \
-            --notes "Automatically built from commit \`${{ github.sha }}\` on $(date -u '+%Y-%m-%d %H:%M UTC')." \
+          gh release create "$NEXT" \
+            --title "$NEXT" \
+            --notes "Version $NEXT — built from commit \`${{ github.sha }}\` on $(date -u '+%Y-%m-%d %H:%M UTC')." \
             --latest \
             "artifacts/windows-exe/CloudFlareScan-Windows.exe#CloudFlareScan-Windows.exe" \
             "artifacts/macos-app/CloudFlareScan-macOS-arm64.zip#CloudFlareScan-macOS-arm64.zip" \
