@@ -1,4 +1,4 @@
-name: Build Windows EXE
+name: Build and Release
 
 on:
   push:
@@ -6,21 +6,17 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: build-windows-exe
+  group: build-and-release
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     permissions:
-      contents: write
-
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,35 +31,75 @@ jobs:
       - name: Build Windows executable
         # Input file 'CloudFlareScan' has no .py extension — this is intentional
         run: |
-          pyinstaller --onefile --windowed --name CloudFlareScan CloudFlareScan
+          pyinstaller --onefile --windowed --name CloudFlareScan-Windows CloudFlareScan
 
-      - name: Move EXE to repository root
-        run: |
-          Copy-Item -Path dist\CloudFlareScan.exe -Destination CloudFlareScan.exe -Force
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/CloudFlareScan-Windows.exe
 
-      - name: Commit and push EXE
-        shell: bash
+  build-macos:
+    # macos-14 is Apple Silicon (M1, arm64)
+    runs-on: macos-14
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add CloudFlareScan.exe
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-          git commit -m "ci: update Windows executable [skip ci]"
-          pushed=false
-          for i in 1 2 3; do
-            if git pull --rebase && git push; then
-              pushed=true
-              break
-            fi
-            if [ "$i" -lt 3 ]; then
-              echo "Push attempt $i failed, retrying..."
-              sleep 10
-            fi
-          done
-          if [ "$pushed" != "true" ]; then
-            echo "All push attempts failed"
-            exit 1
-          fi
+          python -m pip install --upgrade pip
+          pip install pyinstaller aiohttp PySide6
+
+      - name: Build macOS app
+        # Input file 'CloudFlareScan' has no .py extension — this is intentional
+        run: |
+          pyinstaller --onefile --windowed --name CloudFlareScan-macOS CloudFlareScan
+
+      - name: Package macOS app
+        run: |
+          cd dist
+          zip -r CloudFlareScan-macOS-arm64.zip CloudFlareScan-macOS.app
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/CloudFlareScan-macOS-arm64.zip
+
+  release:
+    needs: [ build-windows, build-macos ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create or update latest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The concurrency group above ensures only one run of this workflow
+          # executes at a time, so delete-then-recreate is race-free.
+          gh release delete latest --yes 2>/dev/null || true
+          git push origin :refs/tags/latest 2>/dev/null || true
+
+          gh release create latest \
+            --title "Latest Build" \
+            --notes "Automatically built from commit \`${{ github.sha }}\` on $(date -u '+%Y-%m-%d %H:%M UTC')." \
+            --latest \
+            "artifacts/windows-exe/CloudFlareScan-Windows.exe#CloudFlareScan-Windows.exe" \
+            "artifacts/macos-app/CloudFlareScan-macOS-arm64.zip#CloudFlareScan-macOS-arm64.zip"
