@@ -74,6 +74,41 @@ jobs:
           name: macos-app
           path: dist/CloudFlareScan-macOS-arm64.zip
 
+  build-macos-intel:
+    # macos-13 is Intel (x86_64)
+    runs-on: macos-13
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller aiohttp PySide6
+
+      - name: Build macOS Intel app
+        # Input file 'CloudFlareScan' has no .py extension — this is intentional
+        run: |
+          pyinstaller --onefile --windowed --name CloudFlareScan-macOS CloudFlareScan
+
+      - name: Package macOS Intel app
+        run: |
+          cd dist
+          zip -r CloudFlareScan-macOS-x86_64.zip CloudFlareScan-macOS.app
+
+      - name: Upload macOS Intel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-app
+          path: dist/CloudFlareScan-macOS-x86_64.zip
+
   build-ubuntu:
     runs-on: ubuntu-latest
     permissions:
@@ -109,7 +144,7 @@ jobs:
           path: dist/CloudFlareScan-Ubuntu-x86_64.zip
 
   release:
-    needs: [ build-windows, build-macos, build-ubuntu ]
+    needs: [ build-windows, build-macos, build-macos-intel, build-ubuntu ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -126,15 +161,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # The concurrency group above ensures only one run of this workflow
-          # executes at a time, so delete-then-recreate is race-free.
-          gh release delete latest --yes 2>/dev/null || true
-          git push origin :refs/tags/latest 2>/dev/null || true
+          # Compute next version (X.Y.Z, carry at 10) from the latest versioned release tag.
+          LATEST_TAG=$(gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))] | sort_by(.tagName | ltrimstr("v") | split(".") | map(tonumber)) | last | .tagName // ""')
+          if [ -z "$LATEST_TAG" ]; then
+            NEXT="v0.0.1"
+          else
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${LATEST_TAG#v}"
+            PATCH=$((PATCH + 1))
+            if [ $PATCH -ge 10 ]; then PATCH=0; MINOR=$((MINOR + 1)); fi
+            if [ $MINOR -ge 10 ]; then MINOR=0; MAJOR=$((MAJOR + 1)); fi
+            NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "Publishing version: $NEXT"
 
-          gh release create latest \
-            --title "Latest Build" \
-            --notes "Automatically built from commit \`${{ github.sha }}\` on $(date -u '+%Y-%m-%d %H:%M UTC')." \
+          gh release create "$NEXT" \
+            --title "$NEXT" \
+            --notes "Version $NEXT — built from commit \`${{ github.sha }}\` on $(date -u '+%Y-%m-%d %H:%M UTC')." \
             --latest \
             "artifacts/windows-exe/CloudFlareScan-Windows.exe#CloudFlareScan-Windows.exe" \
             "artifacts/macos-app/CloudFlareScan-macOS-arm64.zip#CloudFlareScan-macOS-arm64.zip" \
+            "artifacts/macos-intel-app/CloudFlareScan-macOS-x86_64.zip#CloudFlareScan-macOS-x86_64.zip" \
             "artifacts/ubuntu-bin/CloudFlareScan-Ubuntu-x86_64.zip#CloudFlareScan-Ubuntu-x86_64.zip"
