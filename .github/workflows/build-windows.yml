@@ -91,14 +91,15 @@ jobs:
       - name: Install dependencies (x86_64 via Rosetta 2)
         shell: arch -x86_64 /bin/bash -l {0}
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pyinstaller aiohttp PySide6
+          python3 -m venv "$RUNNER_TEMP/venv-x86"
+          "$RUNNER_TEMP/venv-x86/bin/pip" install --upgrade pip
+          "$RUNNER_TEMP/venv-x86/bin/pip" install pyinstaller aiohttp PySide6
 
       - name: Build macOS Intel app
         # Input file 'CloudFlareScan' has no .py extension — this is intentional
         shell: arch -x86_64 /bin/bash -l {0}
         run: |
-          python3 -m pyinstaller --onefile --windowed --name CloudFlareScan-macOS CloudFlareScan
+          "$RUNNER_TEMP/venv-x86/bin/pyinstaller" --onefile --windowed --name CloudFlareScan-macOS CloudFlareScan
 
       - name: Package macOS Intel app
         run: |
