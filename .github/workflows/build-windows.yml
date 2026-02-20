@@ -66,7 +66,7 @@ jobs:
       - name: Package macOS app
         run: |
           cd dist
-          zip -r CloudFlareScan-macOS-arm64.zip CloudFlareScan-macOS.app
+          zip -0 -r CloudFlareScan-macOS-arm64.zip CloudFlareScan-macOS.app
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -75,8 +75,8 @@ jobs:
           path: dist/CloudFlareScan-macOS-arm64.zip
 
   build-macos-intel:
-    # macos-13 is Intel (x86_64)
-    runs-on: macos-13
+    # macos-14 is Apple Silicon; use Rosetta 2 (arch -x86_64) to cross-build for Intel (x86_64)
+    runs-on: macos-14
     permissions:
       contents: read
     steps:
@@ -88,20 +88,22 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install dependencies (x86_64 via Rosetta 2)
+        shell: arch -x86_64 /bin/bash -l {0}
         run: |
-          python -m pip install --upgrade pip
-          pip install pyinstaller aiohttp PySide6
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyinstaller aiohttp PySide6
 
       - name: Build macOS Intel app
         # Input file 'CloudFlareScan' has no .py extension — this is intentional
+        shell: arch -x86_64 /bin/bash -l {0}
         run: |
-          pyinstaller --onefile --windowed --name CloudFlareScan-macOS CloudFlareScan
+          python3 -m pyinstaller --onefile --windowed --name CloudFlareScan-macOS CloudFlareScan
 
       - name: Package macOS Intel app
         run: |
           cd dist
-          zip -r CloudFlareScan-macOS-x86_64.zip CloudFlareScan-macOS.app
+          zip -0 -r CloudFlareScan-macOS-x86_64.zip CloudFlareScan-macOS.app
 
       - name: Upload macOS Intel artifact
         uses: actions/upload-artifact@v4
@@ -135,7 +137,7 @@ jobs:
       - name: Package Ubuntu executable
         run: |
           cd dist
-          zip CloudFlareScan-Ubuntu-x86_64.zip CloudFlareScan-Linux
+          zip -0 CloudFlareScan-Ubuntu-x86_64.zip CloudFlareScan-Linux
 
       - name: Upload Ubuntu artifact
         uses: actions/upload-artifact@v4
