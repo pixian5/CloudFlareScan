@@ -1121,21 +1121,6 @@ class CloudflareScanUI(QWidget):
             }
         """)
 
-        left_panel.addLayout(row1)
-        left_panel.addWidget(self.progress_bar)
-        left_panel.addWidget(self.combo_region)
-        left_panel.addLayout(row2)
-        left_panel.addWidget(row3_widget)
-
-        top_section.addLayout(left_panel, 1)
-
-        # --- Right panel: scan status and statistics ---
-        right_panel = QVBoxLayout()
-        right_panel.setSpacing(SPACING)
-        right_panel.setAlignment(Qt.AlignTop)
-
-        status_frame = QHBoxLayout()
-
         self.status_label = QLabel("就绪")
         self.status_label.setStyleSheet(f"""
             color: #6B7280;
@@ -1152,11 +1137,24 @@ class CloudflareScanUI(QWidget):
             font-family: "{SYSTEM_FONT}", sans-serif;
         """)
 
+        status_frame = QHBoxLayout()
         status_frame.addWidget(self.status_label)
         status_frame.addStretch()
         status_frame.addWidget(self.speed_label)
 
-        right_panel.addLayout(status_frame)
+        left_panel.addLayout(row1)
+        left_panel.addWidget(self.progress_bar)
+        left_panel.addLayout(status_frame)
+        left_panel.addWidget(self.combo_region)
+        left_panel.addLayout(row2)
+        left_panel.addWidget(row3_widget)
+
+        top_section.addLayout(left_panel, 1)
+
+        # --- Right panel: scan status and statistics ---
+        right_panel = QVBoxLayout()
+        right_panel.setSpacing(SPACING)
+        right_panel.setAlignment(Qt.AlignTop)
 
         status_display_label = QLabel("扫描状态和统计信息")
         status_display_label.setFont(FONT_LABEL)

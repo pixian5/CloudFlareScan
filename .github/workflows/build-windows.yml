@@ -135,16 +135,11 @@ jobs:
         run: |
           pyinstaller --onefile --windowed --name CloudFlareScan-Linux CloudFlareScan
 
-      - name: Package Ubuntu executable
-        run: |
-          cd dist
-          zip -0 CloudFlareScan-Ubuntu-x86_64.zip CloudFlareScan-Linux
-
       - name: Upload Ubuntu artifact
         uses: actions/upload-artifact@v4
         with:
           name: ubuntu-bin
-          path: dist/CloudFlareScan-Ubuntu-x86_64.zip
+          path: dist/CloudFlareScan-Linux
 
   release:
     needs: [ build-windows, build-macos, build-macos-intel, build-ubuntu ]
@@ -179,9 +174,9 @@ jobs:
 
           gh release create "$NEXT" \
             --title "$NEXT" \
-            --notes "Version $NEXT — built from commit \`${{ github.sha }}\` on $(date -u '+%Y-%m-%d %H:%M UTC')." \
+            --notes "Version $NEXT — built from commit \`${{ github.sha }}\` on $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M UTC+8')." \
             --latest \
             "artifacts/windows-exe/CloudFlareScan-Windows.exe#CloudFlareScan-Windows.exe" \
             "artifacts/macos-app/CloudFlareScan-macOS-arm64.zip#CloudFlareScan-macOS-arm64.zip" \
             "artifacts/macos-intel-app/CloudFlareScan-macOS-x86_64.zip#CloudFlareScan-macOS-x86_64.zip" \
-            "artifacts/ubuntu-bin/CloudFlareScan-Ubuntu-x86_64.zip#CloudFlareScan-Ubuntu-x86_64.zip"
+            "artifacts/ubuntu-bin/CloudFlareScan-Linux#CloudFlareScan-Linux"

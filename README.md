@@ -6,17 +6,36 @@ CloudFlare 扫描器 （简称CFS)  适配 Win / macOS / Ubuntu
 
 软件演示视频：https://www.youtube.com/watch?v=x9NTDJqV2uk
 
-🚀 高效扫描：自动从 CloudFlare 官方 IP 段生成 IP 地址
+---
 
-📊 双模式测速：完全测速 + 地区测速，满足不同需求
+## ✨ 功能介绍
 
-🌍 全球覆盖：内置全球大部分机场IATA代码映射，自动识别地区
+### 🔍 IP 扫描
+- **IPv4 扫描**：自动从 CloudFlare 官方 IPv4 IP 段（CIDR 列表）中随机生成 IP 地址，并发发起 HTTPS 连接测试，快速筛选出可访问的 IP。
+- **IPv6 扫描**：同样支持 CloudFlare 官方 IPv6 段，自动生成并测试 IPv6 地址的可达性。
+- **端口选择**：支持多种扫描端口（443、2053、2083、2087、2096、8443），可按需切换，满足不同网络环境下的连通性测试。
 
-⚡ 异步处理：支持高并发测试，快速获取结果
+### 📊 双模式测速
+- **地区测速**：扫描完成后，按 IATA 机场代码识别 IP 所属地区，可选择指定地区进行测速，精准找出最优节点。
+- **完全测速**：对所有扫描到的可用 IP 进行全量下载速度测试，获取每个 IP 的真实下载速率（MB/s）和延迟（ms）。
+- **测速结果表格**：结果以表格形式展示，含 IP 地址、下载速度、所属地区（中文名）、延迟及端口，支持双击单元格一键复制。
 
-📋 一键复制：双击表格单元格即可复制内容
+### 🌍 全球地区识别
+- 内置全球主要机场 IATA 代码与中文地区名的映射表，覆盖亚洲、欧洲、美洲、大洋洲等 200+ 地区，自动将 IP 归属地显示为中文名称。
 
-📈 实时统计：显示扫描进度、速度
+### ⚡ 高性能异步处理
+- 基于 `asyncio` + `aiohttp` 实现全异步并发扫描，单次可同时测试大量 IP，扫描速度快、资源占用低。
+
+### 📈 实时进度显示
+- 进度条实时反映扫描/测速进度。
+- 进度条下方同步显示当前状态（就绪 / 扫描中 / 测速中）和实时扫描速度（IP/秒）。
+- 右侧日志面板滚动输出详细的扫描和测速日志，方便追踪每一步操作。
+
+### 📋 结果导出
+- 支持将测速结果一键导出为 CSV 文件，便于后续分析和使用。
+
+### 🖥️ 跨平台 GUI
+- 基于 PySide6（Qt6）构建，界面简洁美观，原生支持 Windows、macOS（Apple Silicon & Intel）、Ubuntu/Linux。
 
 ---
 
@@ -28,7 +47,8 @@ CloudFlare 扫描器 （简称CFS)  适配 Win / macOS / Ubuntu
 |------|------|------|
 | Windows 10/11 (x64) | `CloudFlareScan-Windows.exe` | 直接双击运行 |
 | macOS Apple Silicon (M芯片, arm64) | `CloudFlareScan-macOS-arm64.zip` | 解压后运行 .app |
-| Ubuntu / Linux (x86_64) | `CloudFlareScan-Ubuntu-x86_64.zip` | 解压后运行二进制文件 |
+| macOS Intel (x86_64) | `CloudFlareScan-macOS-x86_64.zip` | 解压后运行 .app |
+| Ubuntu / Linux (x86_64) | `CloudFlareScan-Linux` | 给文件加执行权限后运行 |
 
 > **自动发布说明**：每次合并到 `main` 分支，CI 流水线（`.github/workflows/build-windows.yml`）自动并行编译三个平台版本，完成后覆盖更新 [Latest Release](../../releases/latest)。也可在 Actions 页面手动触发（`workflow_dispatch`）。
 
@@ -45,7 +65,9 @@ CloudFlare 扫描器 （简称CFS)  适配 Win / macOS / Ubuntu
 osascript -e 'do shell script "sudo spctl --master-disable" with administrator privileges'
 ```
 
-**Ubuntu / Linux**：下载并解压 `CloudFlareScan-Ubuntu-x86_64.zip`，给文件加执行权限后运行：
+**macOS（Intel）**：下载并解压 `CloudFlareScan-macOS-x86_64.zip`，同上操作。
+
+**Ubuntu / Linux**：下载 `CloudFlareScan-Linux`，给文件加执行权限后运行：
 
 ```bash
 chmod +x CloudFlareScan-Linux
