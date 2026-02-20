@@ -639,7 +639,7 @@ class SpeedTestWorker(QThread):
     status_message = Signal(str)
     speed_test_completed = Signal(list)
     
-    def __init__(self, results: List[Dict], region_code: str = None, current_port=443):
+    def __init__(self, results: List[Dict], region_code: str = None, current_port=443, max_count=10):
         super().__init__()
         self.results = results
         self.region_code = region_code.upper() if region_code else None
@@ -648,6 +648,7 @@ class SpeedTestWorker(QThread):
         self.test_host = "speed.cloudflare.com"
         self.running = True
         self.current_port = current_port
+        self.max_count = max_count
     
     def download_speed(self, ip: str, port: int) -> float:
         ctx = ssl.create_default_context()
@@ -721,7 +722,7 @@ class SpeedTestWorker(QThread):
                 return
             
             filtered_results.sort(key=lambda x: x.get('latency', float('inf')))
-            target_ips = filtered_results[:min(10, len(filtered_results))]
+            target_ips = filtered_results[:min(self.max_count, len(filtered_results))]
             
             test_type = "地区测速" if self.region_code else "完全测速"
             self.status_message.emit(f"{test_type}：将对 {len(target_ips)} 个IP进行测速")
@@ -995,28 +996,31 @@ class CloudflareScanUI(QWidget):
         self.btn_ipv6 = self.make_btn("IPv6 扫描", "#22C55E", enabled=True)
         self.btn_ipv6.clicked.connect(self.start_ipv6_scan)
         
-        self.input_region = QLineEdit()
-        self.input_region.setFixedSize(BTN_W, BTN_H)
-        self.input_region.setFont(FONT_BTN)
-        self.input_region.setPlaceholderText("输入地区码")
-
-        self.input_region.setStyleSheet(f"""
-            QLineEdit {{
+        self.combo_region = QComboBox()
+        self.combo_region.setFixedSize(BTN_W, BTN_H)
+        self.combo_region.setFont(FONT_BTN)
+        self.combo_region.addItem("请先扫描", None)
+        self.combo_region.setEnabled(False)
+        self.combo_region.setStyleSheet(f"""
+            QComboBox {{
                 background: white;
                 border: 1px solid #D1D5DB;
                 border-radius: 6px;
                 padding-left: 8px;
                 font-family: "{SYSTEM_FONT}";
             }}
-            QLineEdit:focus {{
+            QComboBox:focus {{
                 border-color: #F97316;
             }}
+            QComboBox:disabled {{
+                background: #E5E7EB;
+                color: #6B7280;
+            }}
         """)
-        self.input_region.textChanged.connect(self.auto_uppercase)
 
         row1.addWidget(self.btn_ipv4)
         row1.addWidget(self.btn_ipv6)
-        row1.addWidget(self.input_region)
+        row1.addWidget(self.combo_region)
 
         row2 = QHBoxLayout()
         row2.setSpacing(SPACING)
@@ -1054,8 +1058,34 @@ class CloudflareScanUI(QWidget):
         self.combo_port.setCurrentText("443")
         self.combo_port.setFont(FONT_BTN)
         row3.addWidget(self.combo_port)
+
+        count_label = QLabel("数量:")
+        count_label.setFont(FONT_BTN)
+        count_label.setStyleSheet(f"""
+            color: #111827;
+            font-family: "{SYSTEM_FONT}";
+        """)
+        row3.addWidget(count_label)
+
+        self.input_count = QLineEdit()
+        self.input_count.setFixedSize(45, BTN_H)
+        self.input_count.setFont(FONT_BTN)
+        self.input_count.setText("10")
+        self.input_count.setStyleSheet(f"""
+            QLineEdit {{
+                background: white;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding-left: 4px;
+                font-family: "{SYSTEM_FONT}";
+            }}
+            QLineEdit:focus {{
+                border-color: #F97316;
+            }}
+        """)
+        row3.addWidget(self.input_count)
         
-        row3.addSpacing(20)
+        row3.addSpacing(8)
         
         self.btn_export = self.make_btn("导出结果", "#8B5CF6", enabled=False)
         self.btn_export.clicked.connect(self.export_results)
@@ -1217,10 +1247,6 @@ class CloudflareScanUI(QWidget):
         """)
         main.addWidget(self.speed_table, 1)
     
-    def auto_uppercase(self, text):
-        if text != text.upper():
-            self.input_region.setText(text.upper())
-    
     def start_ipv4_scan(self):
         if self.scanning or self.speed_testing:
             return
@@ -1231,6 +1257,8 @@ class CloudflareScanUI(QWidget):
         self.scan_results = []
         self.speed_table.setRowCount(0)
         self.status_display.clear()
+        self.combo_region.clear()
+        self.combo_region.addItem("扫描中...", None)
         self.status_display.append("正在开始IPv4扫描...")
         self.status_display.append("=" * 25)
         
@@ -1260,6 +1288,8 @@ class CloudflareScanUI(QWidget):
         self.scan_results = []
         self.speed_table.setRowCount(0)
         self.status_display.clear()
+        self.combo_region.clear()
+        self.combo_region.addItem("扫描中...", None)
         self.status_display.append("正在开始IPv6扫描...")
         self.status_display.append("=" * 25)
         
@@ -1294,6 +1324,13 @@ class CloudflareScanUI(QWidget):
             
             QTimer.singleShot(2000, lambda: self.status_label.setText("就绪"))
     
+    def get_validated_test_count(self):
+        try:
+            count = int(self.input_count.text().strip())
+            return count if count >= 1 else 10
+        except ValueError:
+            return 10
+    
     def start_full_speed_test(self):
         if self.speed_testing or self.scanning:
             return
@@ -1312,7 +1349,9 @@ class CloudflareScanUI(QWidget):
         self.status_label.setText("完全测速中...")
         self.speed_label.setText("测速进度: 0/5")
         
-        self.speed_test_worker = SpeedTestWorker(self.scan_results, current_port=self.current_scan_port)
+        max_count = self.get_validated_test_count()
+        
+        self.speed_test_worker = SpeedTestWorker(self.scan_results, current_port=self.current_scan_port, max_count=max_count)
         self.speed_test_worker.progress_update.connect(self.update_speed_test_progress)
         self.speed_test_worker.status_message.connect(self.update_status_message)
         self.speed_test_worker.speed_test_completed.connect(self.speed_test_finished)
@@ -1328,13 +1367,15 @@ class CloudflareScanUI(QWidget):
             self.status_display.append("错误：请先运行扫描获取IP列表！")
             return
         
-        region_code = self.input_region.text().strip().upper()
+        region_code = self.combo_region.currentData()
         if not region_code:
-            self.status_display.append("错误：请输入地区码（如SJC、SIN等）")
+            self.status_display.append("错误：请先扫描并从下拉列表选择地区")
             return
         
         if region_code not in AIRPORT_CODES:
             self.status_display.append(f"警告：地区码 {region_code} 不在已知列表中，将继续尝试测速")
+        
+        max_count = self.get_validated_test_count()
         
         self.speed_testing = True
         self.update_ui_state(task_started=True)
@@ -1346,7 +1387,7 @@ class CloudflareScanUI(QWidget):
         self.status_label.setText(f"{region_code}地区测速中...")
         self.speed_label.setText("测速进度: 0/5")
         
-        self.speed_test_worker = SpeedTestWorker(self.scan_results, region_code, current_port=self.current_scan_port)
+        self.speed_test_worker = SpeedTestWorker(self.scan_results, region_code, current_port=self.current_scan_port, max_count=max_count)
         self.speed_test_worker.progress_update.connect(self.update_speed_test_progress)
         self.speed_test_worker.status_message.connect(self.update_status_message)
         self.speed_test_worker.speed_test_completed.connect(self.speed_test_finished)
@@ -1451,14 +1492,18 @@ class CloudflareScanUI(QWidget):
             self.btn_area.setEnabled(False)
             self.btn_export.setEnabled(False)
             self.combo_port.setEnabled(False)
+            self.input_count.setEnabled(False)
+            self.combo_region.setEnabled(False)
         else:
             self.btn_stop.setEnabled(False)
             self.btn_ipv4.setEnabled(True)
             self.btn_ipv6.setEnabled(True)
             self.combo_port.setEnabled(True)
+            self.input_count.setEnabled(True)
             if self.scan_results:
                 self.btn_full.setEnabled(True)
                 self.btn_area.setEnabled(True)
+                self.combo_region.setEnabled(True)
             
             self.progress_bar.setValue(0)
     
@@ -1491,6 +1536,8 @@ class CloudflareScanUI(QWidget):
         if not results:
             self.status_display.append("")
             self.status_display.append("扫描完成！未找到任何可用IP地址。")
+            self.combo_region.clear()
+            self.combo_region.addItem("无可用地区", None)
             return
         
         ipv4_count = sum(1 for r in results if ':' not in r['ip'])
@@ -1516,9 +1563,14 @@ class CloudflareScanUI(QWidget):
             self.status_display.append(f"地区统计（共 {len(iata_stats)} 个不同地区）：")
             sorted_iata = sorted(iata_stats.items(), key=lambda x: x[1], reverse=True)
             
+            self.combo_region.clear()
             for iata, count in sorted_iata:
                 self.status_display.append(f"  {iata}: {count}个IP")
+                code = iata.split(' ')[0]
+                self.combo_region.addItem(f"{iata}: {count}个", code)
         else:
+            self.combo_region.clear()
+            self.combo_region.addItem("无地区信息", None)
             self.status_display.append("提示：本次扫描未获取到具体的地区码信息（可能都是UNKNOWN）。")
             self.status_display.append("这可能是暂时的网络波动，或者是这些IP没有返回地区信息。")
         
