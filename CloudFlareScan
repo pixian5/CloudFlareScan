@@ -867,8 +867,8 @@ class CloudflareScanUI(QWidget):
         super().__init__()
         self.setWindowTitle("CloudFlare Scan - 小琳解说 v2.0")
         
-        self.resize(450, 800)
-        self.setMinimumSize(430, 600)
+        self.resize(620, 800)
+        self.setMinimumSize(580, 600)
         
         if platform.system() == "Darwin":  
             self.setStyleSheet(f"""
@@ -1008,7 +1008,7 @@ class CloudflareScanUI(QWidget):
         self.btn_ipv6.clicked.connect(self.start_ipv6_scan)
         
         self.combo_region = QComboBox()
-        self.combo_region.setFixedSize(BTN_W, BTN_H)
+        self.combo_region.setFixedSize(BTN_W * 3 + SPACING * 2, BTN_H)
         self.combo_region.setFont(FONT_BTN)
         self.combo_region.addItem("请先扫描", None)
         self.combo_region.setEnabled(False)
@@ -1029,16 +1029,21 @@ class CloudflareScanUI(QWidget):
             }}
         """)
 
+        self.btn_stop = self.make_stop_btn("停止任务", enabled=False)
+        self.btn_stop.clicked.connect(self.stop_all_tasks)
+
         row1.addWidget(self.btn_ipv4)
         row1.addWidget(self.btn_ipv6)
-        row1.addWidget(self.combo_region)
+        row1.addWidget(self.btn_stop)
+
+        row_region = QHBoxLayout()
+        row_region.setSpacing(SPACING)
+        row_region.setAlignment(Qt.AlignCenter)
+        row_region.addWidget(self.combo_region)
 
         row2 = QHBoxLayout()
         row2.setSpacing(SPACING)
         row2.setAlignment(Qt.AlignCenter)
-
-        self.btn_stop = self.make_stop_btn("停止任务", enabled=False)
-        self.btn_stop.clicked.connect(self.stop_all_tasks)
 
         self.btn_full = self.make_btn("完全测速", "#F97316", enabled=False)
         self.btn_full.clicked.connect(self.start_full_speed_test)
@@ -1046,9 +1051,12 @@ class CloudflareScanUI(QWidget):
         self.btn_area = self.make_btn("地区测速", "#EC4899", enabled=False)
         self.btn_area.clicked.connect(self.start_region_speed_test)
 
-        row2.addWidget(self.btn_stop)
-        row2.addWidget(self.btn_full)
+        self.btn_export = self.make_btn("导出结果", "#8B5CF6", enabled=False)
+        self.btn_export.clicked.connect(self.export_results)
+
         row2.addWidget(self.btn_area)
+        row2.addWidget(self.btn_full)
+        row2.addWidget(self.btn_export)
 
         row3 = QHBoxLayout()
         row3.setSpacing(SPACING)
@@ -1095,14 +1103,9 @@ class CloudflareScanUI(QWidget):
             }}
         """)
         row3.addWidget(self.input_count)
-        
-        row3.addSpacing(8)
-        
-        self.btn_export = self.make_btn("导出结果", "#8B5CF6", enabled=False)
-        self.btn_export.clicked.connect(self.export_results)
-        row3.addWidget(self.btn_export)
 
         control.addLayout(row1)
+        control.addLayout(row_region)
         control.addLayout(row2)
         control.addLayout(row3)
 
