@@ -867,8 +867,8 @@ class CloudflareScanUI(QWidget):
         super().__init__()
         self.setWindowTitle("CloudFlare Scan - 小琳解说 v2.0")
         
-        self.resize(620, 800)
-        self.setMinimumSize(580, 600)
+        self.resize(900, 700)
+        self.setMinimumSize(800, 550)
         
         if platform.system() == "Darwin":  
             self.setStyleSheet(f"""
@@ -993,22 +993,35 @@ class CloudflareScanUI(QWidget):
         title.setAlignment(Qt.AlignCenter)
         main.addWidget(title)
 
-        control = QVBoxLayout()
-        control.setSpacing(SPACING)
-        control.setAlignment(Qt.AlignCenter)
+        # Top section: button area (left) | scan status and stats (right)
+        top_section = QHBoxLayout()
+        top_section.setSpacing(14)
+
+        # --- Left panel: button controls ---
+        BTN_ROW_WIDTH = BTN_W * 3 + SPACING * 2  # 376px, width of 3-button rows
+
+        left_panel = QVBoxLayout()
+        left_panel.setSpacing(SPACING)
+        left_panel.setAlignment(Qt.AlignTop)
 
         row1 = QHBoxLayout()
         row1.setSpacing(SPACING)
-        row1.setAlignment(Qt.AlignCenter)
 
         self.btn_ipv4 = self.make_btn("IPv4 扫描", "#3B82F6")
         self.btn_ipv4.clicked.connect(self.start_ipv4_scan)
-        
+
         self.btn_ipv6 = self.make_btn("IPv6 扫描", "#22C55E", enabled=True)
         self.btn_ipv6.clicked.connect(self.start_ipv6_scan)
-        
+
+        self.btn_stop = self.make_stop_btn("停止任务", enabled=False)
+        self.btn_stop.clicked.connect(self.stop_all_tasks)
+
+        row1.addWidget(self.btn_ipv4)
+        row1.addWidget(self.btn_ipv6)
+        row1.addWidget(self.btn_stop)
+
         self.combo_region = QComboBox()
-        self.combo_region.setFixedSize(BTN_W * 3 + SPACING * 2, BTN_H)
+        self.combo_region.setFixedSize(BTN_ROW_WIDTH, BTN_H)
         self.combo_region.setFont(FONT_BTN)
         self.combo_region.addItem("请先扫描", None)
         self.combo_region.setEnabled(False)
@@ -1029,27 +1042,14 @@ class CloudflareScanUI(QWidget):
             }}
         """)
 
-        self.btn_stop = self.make_stop_btn("停止任务", enabled=False)
-        self.btn_stop.clicked.connect(self.stop_all_tasks)
-
-        row1.addWidget(self.btn_ipv4)
-        row1.addWidget(self.btn_ipv6)
-        row1.addWidget(self.btn_stop)
-
-        row_region = QHBoxLayout()
-        row_region.setSpacing(SPACING)
-        row_region.setAlignment(Qt.AlignCenter)
-        row_region.addWidget(self.combo_region)
-
         row2 = QHBoxLayout()
         row2.setSpacing(SPACING)
-        row2.setAlignment(Qt.AlignCenter)
+
+        self.btn_area = self.make_btn("地区测速", "#EC4899", enabled=False)
+        self.btn_area.clicked.connect(self.start_region_speed_test)
 
         self.btn_full = self.make_btn("完全测速", "#F97316", enabled=False)
         self.btn_full.clicked.connect(self.start_full_speed_test)
-        
-        self.btn_area = self.make_btn("地区测速", "#EC4899", enabled=False)
-        self.btn_area.clicked.connect(self.start_region_speed_test)
 
         self.btn_export = self.make_btn("导出结果", "#8B5CF6", enabled=False)
         self.btn_export.clicked.connect(self.export_results)
@@ -1058,25 +1058,29 @@ class CloudflareScanUI(QWidget):
         row2.addWidget(self.btn_full)
         row2.addWidget(self.btn_export)
 
-        row3 = QHBoxLayout()
+        # row3: port label left-aligns with btn_area, count input right-aligns with btn_export
+        row3_widget = QWidget()
+        row3_widget.setFixedWidth(BTN_ROW_WIDTH)
+        row3 = QHBoxLayout(row3_widget)
+        row3.setContentsMargins(0, 0, 0, 0)
         row3.setSpacing(SPACING)
-        row3.setAlignment(Qt.AlignCenter)
-        
+
         port_label = QLabel("扫描端口:")
         port_label.setFont(FONT_BTN)
-
         port_label.setStyleSheet(f"""
-            color: #111827; 
+            color: #111827;
             font-family: "{SYSTEM_FONT}";
         """)
         row3.addWidget(port_label)
-        
+
         self.combo_port = QComboBox()
         self.combo_port.setFixedSize(100, BTN_H)
         self.combo_port.addItems(PORT_OPTIONS)
         self.combo_port.setCurrentText("443")
         self.combo_port.setFont(FONT_BTN)
         row3.addWidget(self.combo_port)
+
+        row3.addStretch(1)
 
         count_label = QLabel("数量:")
         count_label.setFont(FONT_BTN)
@@ -1104,12 +1108,17 @@ class CloudflareScanUI(QWidget):
         """)
         row3.addWidget(self.input_count)
 
-        control.addLayout(row1)
-        control.addLayout(row_region)
-        control.addLayout(row2)
-        control.addLayout(row3)
+        left_panel.addLayout(row1)
+        left_panel.addWidget(self.combo_region)
+        left_panel.addLayout(row2)
+        left_panel.addWidget(row3_widget)
 
-        main.addLayout(control)
+        top_section.addLayout(left_panel)
+
+        # --- Right panel: scan status and statistics ---
+        right_panel = QVBoxLayout()
+        right_panel.setSpacing(SPACING)
+        right_panel.setAlignment(Qt.AlignTop)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(10)
@@ -1124,44 +1133,43 @@ class CloudflareScanUI(QWidget):
                 border-radius: 5px;
             }
         """)
-        main.addWidget(self.progress_bar)
+        right_panel.addWidget(self.progress_bar)
 
         status_frame = QHBoxLayout()
-        
+
         self.status_label = QLabel("就绪")
         self.status_label.setStyleSheet(f"""
-            color: #6B7280; 
-            font-size: 12px; 
+            color: #6B7280;
+            font-size: 12px;
             padding: 5px;
             font-family: "{SYSTEM_FONT}", sans-serif;
         """)
-        
+
         self.speed_label = QLabel("速度: 0 IP/秒")
         self.speed_label.setStyleSheet(f"""
-            color: #6B7280; 
-            font-size: 12px; 
+            color: #6B7280;
+            font-size: 12px;
             padding: 5px;
             font-family: "{SYSTEM_FONT}", sans-serif;
         """)
-        
+
         status_frame.addWidget(self.status_label)
         status_frame.addStretch()
         status_frame.addWidget(self.speed_label)
-        
-        main.addLayout(status_frame)
+
+        right_panel.addLayout(status_frame)
 
         status_display_label = QLabel("扫描状态和统计信息")
         status_display_label.setFont(FONT_LABEL)
         status_display_label.setStyleSheet(f"""
-            color: #111827; 
-            font-size: 14px; 
+            color: #111827;
+            font-size: 14px;
             font-family: "{SYSTEM_FONT}";
         """)
-        main.addWidget(status_display_label)
+        right_panel.addWidget(status_display_label)
 
         self.status_display = QTextEdit()
         self.status_display.setFont(FONT_STATUS)
-        self.status_display.setMaximumHeight(180)
         self.status_display.setReadOnly(True)
         self.status_display.setStyleSheet(f"""
             QTextEdit {{
@@ -1192,32 +1200,38 @@ class CloudflareScanUI(QWidget):
                 background: none;
             }}
         """)
-        main.addWidget(self.status_display)
+        right_panel.addWidget(self.status_display, 1)
 
+        top_section.addLayout(right_panel, 1)
+
+        main.addLayout(top_section)
+
+        # --- Bottom: speed test results (full width) ---
         speed_results_label = QLabel("测速结果")
         speed_results_label.setFont(FONT_LABEL)
         speed_results_label.setStyleSheet(f"""
-            color: #111827; 
-            font-size: 14px; 
+            color: #111827;
+            font-size: 14px;
             font-family: "{SYSTEM_FONT}";
         """)
         main.addWidget(speed_results_label)
 
         self.speed_table = QTableWidget()
         self.speed_table.setColumnCount(5)
+        # Column order: IP地址 | 下载速度 | 地区 | 延迟 | 端口
+        self.speed_table.setHorizontalHeaderLabels(["IP地址", "下载速度", "地区", "延迟", "端口"])
 
-        self.speed_table.setHorizontalHeaderLabels(["IP地址", "地区", "延迟", "下载速度", "端口"])
-        
-        for i in range(self.speed_table.columnCount() - 1):
-            self.speed_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeToContents)
+        header = self.speed_table.horizontalHeader()
+        # Widen IP address column with a fixed minimum
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        for i in range(1, self.speed_table.columnCount()):
+            header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
 
-        self.speed_table.horizontalHeader().setSectionResizeMode(self.speed_table.columnCount() - 1, QHeaderView.Stretch)
-        
         self.speed_table.verticalHeader().setVisible(False)
-        
+
         self.speed_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.speed_table.doubleClicked.connect(self.copy_table_cell)
-        
+
         self.speed_table.setStyleSheet(f"""
             QTableWidget {{
                 background: #0B3C5D;
@@ -1603,6 +1617,19 @@ class CloudflareScanUI(QWidget):
             ip_item = QTableWidgetItem(result['ip'])
             ip_item.setTextAlignment(Qt.AlignCenter)
             
+            download_speed = result.get('download_speed', 0)
+            speed_item = QTableWidgetItem(f"{download_speed:.2f}")
+            speed_item.setTextAlignment(Qt.AlignCenter)
+            
+            if download_speed > 20:
+                speed_item.setForeground(QColor("#22C55E"))
+            elif download_speed > 10:
+                speed_item.setForeground(QColor("#F59E0B"))
+            elif download_speed > 5:
+                speed_item.setForeground(QColor("#F97316"))
+            else:
+                speed_item.setForeground(QColor("#EF4444"))
+            
             chinese_name = result.get('chinese_name', '未知地区')
             iata_item = QTableWidgetItem(chinese_name)
             iata_item.setTextAlignment(Qt.AlignCenter)
@@ -1618,27 +1645,15 @@ class CloudflareScanUI(QWidget):
             else:
                 latency_item.setForeground(QColor("#EF4444"))
             
-            download_speed = result.get('download_speed', 0)
-            speed_item = QTableWidgetItem(f"{download_speed:.2f}")
-            speed_item.setTextAlignment(Qt.AlignCenter)
-            
-            if download_speed > 20:
-                speed_item.setForeground(QColor("#22C55E"))
-            elif download_speed > 10:
-                speed_item.setForeground(QColor("#F59E0B"))
-            elif download_speed > 5:
-                speed_item.setForeground(QColor("#F97316"))
-            else:
-                speed_item.setForeground(QColor("#EF4444"))
-            
             port = result.get('port', 443)
             port_item = QTableWidgetItem(str(port))
             port_item.setTextAlignment(Qt.AlignCenter)
             
+            # Column order: IP地址 | 下载速度 | 地区 | 延迟 | 端口
             self.speed_table.setItem(row, 0, ip_item)
-            self.speed_table.setItem(row, 1, iata_item)
-            self.speed_table.setItem(row, 2, latency_item)
-            self.speed_table.setItem(row, 3, speed_item)
+            self.speed_table.setItem(row, 1, speed_item)
+            self.speed_table.setItem(row, 2, iata_item)
+            self.speed_table.setItem(row, 3, latency_item)
             self.speed_table.setItem(row, 4, port_item)
         
         if results:
