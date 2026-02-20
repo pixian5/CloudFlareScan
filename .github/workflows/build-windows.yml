@@ -74,6 +74,41 @@ jobs:
           name: macos-app
           path: dist/CloudFlareScan-macOS-arm64.zip
 
+  build-macos-intel:
+    # macos-13 is Intel (x86_64)
+    runs-on: macos-13
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller aiohttp PySide6
+
+      - name: Build macOS Intel app
+        # Input file 'CloudFlareScan' has no .py extension — this is intentional
+        run: |
+          pyinstaller --onefile --windowed --name CloudFlareScan-macOS CloudFlareScan
+
+      - name: Package macOS Intel app
+        run: |
+          cd dist
+          zip -r CloudFlareScan-macOS-x86_64.zip CloudFlareScan-macOS.app
+
+      - name: Upload macOS Intel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel-app
+          path: dist/CloudFlareScan-macOS-x86_64.zip
+
   build-ubuntu:
     runs-on: ubuntu-latest
     permissions:
@@ -109,7 +144,7 @@ jobs:
           path: dist/CloudFlareScan-Ubuntu-x86_64.zip
 
   release:
-    needs: [ build-windows, build-macos, build-ubuntu ]
+    needs: [ build-windows, build-macos, build-macos-intel, build-ubuntu ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -137,4 +172,5 @@ jobs:
             --latest \
             "artifacts/windows-exe/CloudFlareScan-Windows.exe#CloudFlareScan-Windows.exe" \
             "artifacts/macos-app/CloudFlareScan-macOS-arm64.zip#CloudFlareScan-macOS-arm64.zip" \
+            "artifacts/macos-intel-app/CloudFlareScan-macOS-x86_64.zip#CloudFlareScan-macOS-x86_64.zip" \
             "artifacts/ubuntu-bin/CloudFlareScan-Ubuntu-x86_64.zip#CloudFlareScan-Ubuntu-x86_64.zip"
