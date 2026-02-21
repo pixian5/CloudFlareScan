@@ -1219,12 +1219,13 @@ class CloudflareScanUI(QWidget):
         self.speed_table.setHorizontalHeaderLabels(["IP地址", "下载速度", "地区", "延迟", "端口"])
 
         header = self.speed_table.horizontalHeader()
-        # IP address column: interactive with a slightly reduced default width
-        header.setSectionResizeMode(0, QHeaderView.Interactive)
-        self.speed_table.setColumnWidth(0, 150)
+        # IP address column stretches to fill remaining space
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        # Other columns (speed, region, latency, port) sized to their content
         for i in range(1, self.speed_table.columnCount()):
             header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
-        header.setStretchLastSection(True)
+        header.setStretchLastSection(False)
+        self.speed_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.speed_table.verticalHeader().setVisible(False)
 
